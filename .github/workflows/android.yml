@@ -34,19 +34,32 @@ jobs:
           mkdir -p extracted
           unzip -q ClipCraftAI_Android_Starter.zip -d extracted
 
-      - name: Set JVM target to 17
+      - name: Force Java compilation target to 17
         run: |
-          find extracted -type f \( -name "build.gradle" -o -name "build.gradle.kts" \) -exec sed -i 's/VERSION_1_8/VERSION_17/g' {} +
+          cat > force-jvm.gradle <<'EOF'
+          import org.gradle.api.tasks.compile.JavaCompile
+
+          gradle.projectsEvaluated {
+              allprojects {
+                  tasks.withType(JavaCompile).configureEach {
+                      sourceCompatibility = '17'
+                      targetCompatibility = '17'
+                  }
+              }
+          }
+          EOF
 
       - name: Build APK
         run: |
           PROJECT_DIR=$(find extracted -type f \( -name settings.gradle -o -name settings.gradle.kts \) -print -quit | xargs -r dirname)
+
           if [ -z "$PROJECT_DIR" ]; then
             echo "No Gradle settings file found"
             exit 1
           fi
+
           cd "$PROJECT_DIR"
-          gradle assembleDebug
+          gradle -I "$GITHUB_WORKSPACE/force-jvm.gradle" assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
